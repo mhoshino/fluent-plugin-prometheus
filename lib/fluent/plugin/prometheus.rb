@@ -31,7 +31,7 @@ module Fluent
         base_labels
       end
 
-      def self.parse_metrics_elements(conf, registry, labels = {})
+      def self.parse_metrics_elements(conf, registry)
         metrics = []
         conf.elements.select { |element|
           element.name == 'metric'
@@ -42,13 +42,13 @@ module Fluent
           end
           case element['type']
           when 'summary'
-            metrics << Fluent::Plugin::Prometheus::Summary.new(element, registry, labels)
+            metrics << Fluent::Plugin::Prometheus::Summary.new(element, registry)
           when 'gauge'
-            metrics << Fluent::Plugin::Prometheus::Gauge.new(element, registry, labels)
+            metrics << Fluent::Plugin::Prometheus::Gauge.new(element, registry)
           when 'counter'
-            metrics << Fluent::Plugin::Prometheus::Counter.new(element, registry, labels)
+            metrics << Fluent::Plugin::Prometheus::Counter.new(element, registry)
           when 'histogram'
-            metrics << Fluent::Plugin::Prometheus::Histogram.new(element, registry, labels)
+            metrics << Fluent::Plugin::Prometheus::Histogram.new(element, registry)
           else
             raise ConfigError, "type option must be 'counter', 'gauge', 'summary' or 'histogram'"
           end
@@ -94,7 +94,7 @@ module Fluent
         attr_reader :key
         attr_reader :desc
 
-        def initialize(element, registry, labels)
+        def initialize(element, registry)
           ['name', 'desc'].each do |key|
             if element[key].nil?
               raise ConfigError, "metric requires '#{key}' option"
@@ -106,7 +106,6 @@ module Fluent
           @desc = element['desc']
 
           @base_labels = Fluent::Plugin::Prometheus.parse_labels_elements(element)
-          @base_labels = labels.merge(@base_labels)
         end
 
         def labels(record, expander, placeholders)
@@ -137,7 +136,7 @@ module Fluent
       end
 
       class Gauge < Metric
-        def initialize(element, registry, labels)
+        def initialize(element, registry)
           super
           if @key.nil?
             raise ConfigError, "gauge metric requires 'key' option"
@@ -163,7 +162,7 @@ module Fluent
       end
 
       class Counter < Metric
-        def initialize(element, registry, labels)
+        def initialize(element, registry)
           super
           begin
             @counter = registry.counter(element['name'].to_sym, element['desc'])
@@ -190,7 +189,7 @@ module Fluent
       end
 
       class Summary < Metric
-        def initialize(element, registry, labels)
+        def initialize(element, registry)
           super
           if @key.nil?
             raise ConfigError, "summary metric requires 'key' option"
@@ -216,7 +215,7 @@ module Fluent
       end
 
       class Histogram < Metric
-        def initialize(element, registry, labels)
+        def initialize(element, registry)
           super
           if @key.nil?
             raise ConfigError, "histogram metric requires 'key' option"

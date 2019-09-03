@@ -17,8 +17,7 @@ module Fluent::Plugin
 
     def configure(conf)
       super
-      labels = Fluent::Plugin::Prometheus.parse_labels_elements(conf)
-      @metrics = Fluent::Plugin::Prometheus.parse_metrics_elements(conf, @registry, labels)
+      @metrics = Fluent::Plugin::Prometheus.parse_metrics_elements(conf, @registry)
     end
 
     def filter_stream(tag, es)
