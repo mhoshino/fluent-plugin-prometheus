@@ -31,7 +31,7 @@ module Fluent
         base_labels
       end
 
-      def self.parse_metrics_elements(conf, registry)
+      def self.parse_metrics_elements(conf, registry, expander, placeholders)
         metrics = []
         conf.elements.select { |element|
           element.name == 'metric'
@@ -42,13 +42,13 @@ module Fluent
           end
           case element['type']
           when 'summary'
-            metrics << Fluent::Plugin::Prometheus::Summary.new(element, registry)
+            metrics << Fluent::Plugin::Prometheus::Summary.new(element, registry, expander, placeholders)
           when 'gauge'
-            metrics << Fluent::Plugin::Prometheus::Gauge.new(element, registry)
+            metrics << Fluent::Plugin::Prometheus::Gauge.new(element, registry, expander, placeholders)
           when 'counter'
-            metrics << Fluent::Plugin::Prometheus::Counter.new(element, registry)
+            metrics << Fluent::Plugin::Prometheus::Counter.new(element, registry, expander, placeholders)
           when 'histogram'
-            metrics << Fluent::Plugin::Prometheus::Histogram.new(element, registry)
+            metrics << Fluent::Plugin::Prometheus::Histogram.new(element, registry, expander, placeholders)
           else
             raise ConfigError, "type option must be 'counter', 'gauge', 'summary' or 'histogram'"
           end
@@ -94,7 +94,7 @@ module Fluent
         attr_reader :key
         attr_reader :desc
 
-        def initialize(element, registry)
+        def initialize(element, registry, expander, placeholders)
           ['name', 'desc'].each do |key|
             if element[key].nil?
               raise ConfigError, "metric requires '#{key}' option"
@@ -136,7 +136,7 @@ module Fluent
       end
 
       class Gauge < Metric
-        def initialize(element, registry)
+        def initialize(element, registry, expander, placeholders)
           super
           if @key.nil?
             raise ConfigError, "gauge metric requires 'key' option"
@@ -147,6 +147,7 @@ module Fluent
           rescue ::Prometheus::Client::Registry::AlreadyRegisteredError
             @gauge = Fluent::Plugin::Prometheus::Metric.get(registry, element['name'].to_sym, :gauge, element['desc'])
           end
+          @quage.set(labels({}, expander, placeholders), 0)
         end
 
         def instrument(record, expander, placeholders)
@@ -162,13 +163,14 @@ module Fluent
       end
 
       class Counter < Metric
-        def initialize(element, registry)
+        def initialize(element, registry, expander, placeholders)
           super
           begin
             @counter = registry.counter(element['name'].to_sym, element['desc'])
           rescue ::Prometheus::Client::Registry::AlreadyRegisteredError
             @counter = Fluent::Plugin::Prometheus::Metric.get(registry, element['name'].to_sym, :counter, element['desc'])
           end
+          @counter.increment(labels({}, expander, placeholders), 0)
         end
 
         def instrument(record, expander, placeholders)
@@ -189,7 +191,7 @@ module Fluent
       end
 
       class Summary < Metric
-        def initialize(element, registry)
+        def initialize(element, registry, expander, placeholders)
           super
           if @key.nil?
             raise ConfigError, "summary metric requires 'key' option"
@@ -200,6 +202,7 @@ module Fluent
           rescue ::Prometheus::Client::Registry::AlreadyRegisteredError
             @summary = Fluent::Plugin::Prometheus::Metric.get(registry, element['name'].to_sym, :summary, element['desc'])
           end
+          @summary.observe(labels(record, expander, placeholders), NaN)
         end
 
         def instrument(record, expander, placeholders)
@@ -215,7 +218,7 @@ module Fluent
       end
 
       class Histogram < Metric
-        def initialize(element, registry)
+        def initialize(element, registry, expander, placeholders)
           super
           if @key.nil?
             raise ConfigError, "histogram metric requires 'key' option"
@@ -233,6 +236,7 @@ module Fluent
           rescue ::Prometheus::Client::Registry::AlreadyRegisteredError
             @histogram = Fluent::Plugin::Prometheus::Metric.get(registry, element['name'].to_sym, :histogram, element['desc'])
           end
+          @histogram.observe(labels(record, expander, placeholders), NaN)
         end
 
         def instrument(record, expander, placeholders)

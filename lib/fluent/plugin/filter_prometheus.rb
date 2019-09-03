@@ -17,7 +17,15 @@ module Fluent::Plugin
 
     def configure(conf)
       super
-      @metrics = Fluent::Plugin::Prometheus.parse_metrics_elements(conf, @registry)
+
+      placeholder_values = {
+        'hostname' => @hostname,
+        'worker_id' => fluentd_worker_id,
+      }
+
+      placeholders = @placeholder_expander.prepare_placeholders(placeholder_values)
+
+      @metrics = Fluent::Plugin::Prometheus.parse_metrics_elements(conf, @registry , @placeholder_expander, placeholders)
     end
 
     def filter_stream(tag, es)
